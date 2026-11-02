@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>kroll — escrow</title>
+<script>
+window.addEventListener('error',function(e){
+  var b=document.getElementById('body');
+  if(b) b.innerHTML='<p style="color:#ff5c5c;font-size:12px;white-space:pre-wrap">Error: '+
+    (e.message||'unknown')+'<br>'+(e.filename||'')+':'+(e.lineno||'')+'</p>';
+});
+</script>
+<style>
+  :root{--bg:#07080a;--card:#0f1115;--line:#1e2229;--fg:#e9eef4;--dim:#7b8794;
+        --acc:#c8ff3d;--ok:#22e07a;--bad:#ff5c5c}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);-webkit-text-size-adjust:100%;
+       font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+       font-size:14px;line-height:1.55;display:flex;justify-content:center;padding:40px 18px}
+  .kr{width:100%;max-width:520px}
+  .top{display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;
+       border-bottom:1px solid var(--line);margin-bottom:22px}
+  .logo{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:700;
+        font-size:19px;line-height:1;letter-spacing:-.02em}
+  .logo i{font-style:normal;color:var(--acc)}
+  .tag{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--dim)}
+  h2{font-size:15px;margin:0 0 4px;font-weight:650}
+  p.sub{margin:0 0 18px;font-size:12.5px;color:var(--dim)}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .coin{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px;
+        border:1px solid var(--line);border-radius:10px;background:var(--card);
+        cursor:pointer;transition:.14s}
+  .coin:hover{border-color:#3a414b;transform:translateY(-1px)}
+  .coin.on{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc) inset}
+  .ic{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;
+      font-family:ui-monospace,monospace;font-weight:700;font-size:10.5px;line-height:1;color:#fff}
+  .nm{font-size:10px;color:var(--dim);text-align:center}
+  .amt{margin-top:16px}
+  label{display:block;font-size:10px;letter-spacing:.15em;text-transform:uppercase;
+        color:var(--dim);margin-bottom:6px}
+  .inp{width:100%;padding:11px 12px;border-radius:8px;border:1px solid var(--line);
+       background:#0b0d10;color:var(--fg);font-family:ui-monospace,monospace;font-size:14px}
+  .inp:focus{outline:none;border-color:var(--acc)}
+  .inp.bad{border-color:var(--bad)}
+  .btn{width:100%;padding:12px;border-radius:8px;border:1px solid var(--line);
+       background:#171b21;color:var(--fg);cursor:pointer;transition:.14s;
+       font-family:inherit;font-size:13px;font-weight:600;line-height:1}
+  .btn:hover:not(:disabled){border-color:var(--acc)}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.pri{background:var(--acc);border-color:var(--acc);color:#04120a}
+  .btn.pri:hover:not(:disabled){filter:brightness(1.08)}
+  .card{border:1px solid var(--line);border-radius:12px;background:var(--card);
+        padding:18px;margin-bottom:12px}
+  .qrwrap{display:flex;justify-content:center;padding:2px 0 14px}
+  .qr{width:168px;height:168px;border-radius:10px;background:#fff;display:grid;
+      place-items:center;padding:9px;overflow:hidden;font-size:9px;color:#777;text-align:center}
+  .qr svg{display:block}
+  .addr{font-family:ui-monospace,monospace;font-size:12px;line-height:1.6;word-break:break-all;
+        text-align:center;padding:11px;border-radius:8px;background:#0b0d10;
+        border:1px dashed var(--line);margin-bottom:9px}
+  .cwrap{display:flex;justify-content:center}
+  .mini{font-size:11px;padding:7px 12px;border-radius:7px;border:1px solid var(--line);
+        background:transparent;color:var(--dim);cursor:pointer;font-family:inherit}
+  .mini:hover{border-color:var(--acc);color:var(--fg)}
+  .clock{text-align:center;padding:14px 0 2px}
+  .time{font-family:ui-monospace,monospace;font-weight:700;font-size:38px;line-height:1;
+        letter-spacing:.04em;font-variant-numeric:tabular-nums}
+  .time.hot{color:var(--ok)}
+  .st{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin-top:8px}
+  .recv{display:flex;align-items:baseline;justify-content:center;gap:8px;padding:14px 0 2px;font-size:12.5px}
+  .recv b{font-family:ui-monospace,monospace;font-weight:700;font-size:20px;line-height:1;
+          font-variant-numeric:tabular-nums}
+  .recv small{color:var(--dim);font-size:11px}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block;
+       animation:kp 1.8s infinite}
+  .dot.off{background:var(--dim);animation:none}
+  @keyframes kp{0%,100%{opacity:1}50%{opacity:.25}}
+  .bar{height:3px;border-radius:3px;background:#181c22;overflow:hidden;margin-top:8px}
+  .bar i{display:block;height:100%;width:0;background:var(--ok);transition:width .4s}
+  .row{display:flex;justify-content:space-between;gap:12px;padding:7px 0;font-size:12.5px;
+       border-bottom:1px solid var(--line)}
+  .row:last-child{border:0}
+  .row b{font-weight:400;color:var(--dim)}
+  .row span{font-family:ui-monospace,monospace;text-align:right;word-break:break-all}
+  .note{font-size:11px;color:var(--dim);margin-top:10px;line-height:1.5}
+  .warn{font-size:11px;color:var(--bad);margin-top:8px;line-height:1.5}
+  .ok{text-align:center;padding:14px 0 6px;font-size:34px;line-height:1;color:var(--ok)}
+  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:14px}
+  .seg button{flex:1;padding:8px;border:0;background:transparent;color:var(--dim);
+              cursor:pointer;font-family:inherit;font-size:11px}
+  .seg button.on{background:var(--acc);color:#04120a;font-weight:600}
+  .hide{display:none}
+</style>
+</head>
+<body>
+<div class="kr">
+  <div class="top">
+    <div class="logo">kr<i>o</i>ll</div>
+    <div class="tag">escrow</div>
+  </div>
+  <div id="body"></div>
+</div>
+
+<noscript><p style="color:#ff5c5c;padding:20px">JavaScript is off in this browser.</p></noscript>
+
+<script>
+(function(){
+  const MINE='kroll_mine', QCDN='https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
+  const T='TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
+  const REAL=10*3600*1000, DEMO=20*1000;
+
+  const jget=async u=>{const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw 0;return r.json()};
+  const rpc=async(u,m,p)=>{const r=await fetch(u,{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({jsonrpc:'2.0',id:1,method:m,params:p})});const d=await r.json();if(d.error)throw 0;return d.result};
+
+  const COINS=[
+    {id:'btc',n:'Bitcoin',s:'BTC',c:'#f7931a',dec:8,re:/^(bc1[a-z0-9]{25,62}|[13][a-km-zA-HJ-NP-Z1-9]{25,34})$/,
+     f:a=>jget('https://mempool.space/api/address/'+a).then(d=>BigInt(d.chain.funded_txo_sum)-BigInt(d.chain.spent_txo_sum))},
+    {id:'eth',n:'Ethereum',s:'ETH',c:'#627eea',dec:18,re:/^0x[a-fA-F0-9]{40}$/,
+     f:a=>rpc('https://ethereum-rpc.publicnode.com','eth_getBalance',[a,'latest']).then(h=>BigInt(h))},
+    {id:'usdt',n:'Tether',s:'USDT',c:'#26a17b',dec:6,re:/^T[1-9A-HJ-NP-Za-km-z]{33}$/,
+     f:a=>jget('https://api.trongrid.io/v1/accounts/'+a).then(d=>{const t=(d.data&&d.data[0]&&d.data[0].trc20||[]).find(x=>x[T]);return t?BigInt(t[T]):0n})},
+    {id:'sol',n:'Solana',s:'SOL',c:'#9945ff',dec:9,re:/^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
+     f:a=>rpc('https://api.mainnet-beta.solana.com','getBalance',[a]).then(d=>BigInt(d.value))},
+    {id:'xrp',n:'XRP',s:'XRP',c:'#4b5563',dec:6,re:/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/,
+     f:a=>rpc('https://xrplcluster.com','account_info',[{account:a,ledger_index:'validated'}]).then(d=>BigInt(d.account_data.Balance)).catch(()=>0n)},
+    {id:'ltc',n:'Litecoin',s:'LTC',c:'#bfbbbb',dec:8,re:/^(ltc1[a-z0-9]{25,62}|[LM3][a-km-zA-HJ-NP-Z1-9]{25,34})$/,
+     f:a=>jget('https://litecoinspace.org/api/address/'+a).then(d=>BigInt(d.chain.funded_txo_sum)-BigInt(d.chain.spent_txo_sum))},
+    {id:'doge',n:'Dogecoin',s:'DOGE',c:'#c2a633',dec:8,re:/^D[5-9A-HJ-NP-U][1-9A-HJ-NP-Za-km-z]{32}$/,
+     f:a=>jget('https://dogechain.info/api/v1/address/balance/'+a).then(d=>BigInt(Math.round(parseFloat(d.balance||0)*1e8)))},
+    {id:'bnb',n:'BNB',s:'BNB',c:'#f3ba2f',dec:18,re:/^0x[a-fA-F0-9]{40}$/,
+     f:a=>rpc('https://bsc-rpc.publicnode.com','eth_getBalance',[a,'latest']).then(h=>BigInt(h))}
+  ];
+
+  const HEX='0123456789abcdef';
+  const R=(n,a)=>{const b=new Uint8Array(n);crypto.getRandomValues(b);
+                  return Array.from(b,x=>a[x%a.length]).join('')};
+  const body=document.getElementById('body');
+  const coin=id=>COINS.find(c=>c.id===id);
+  const esc=s=>String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+  const mine=()=>{try{return JSON.parse(localStorage.getItem(MINE))||{}}catch(e){return{}}};
+  const setMine=o=>{try{localStorage.setItem(MINE,JSON.stringify(o))}catch(e){}};
+  const xk=a=>'kroll_x_'+a;
+  const loadX=a=>{try{return JSON.parse(localStorage.getItem(xk(a)))||{}}catch(e){return{}}};
+  const saveX=()=>{if(!S.addr)return;
+    try{localStorage.setItem(xk(S.addr),JSON.stringify(
+      {confirmed:S.confirmed,dest:S.dest,hash:S.hash,recv:S.recv}))}catch(e){}};
+
+  let S={}, tick=null, poll=null, qrp=null;
+
+  function hms(ms){const t=Math.max(0,Math.floor(ms/1000));
+    return [Math.floor(t/3600),Math.floor(t%3600/60),t%60].map(v=>String(v).padStart(2,'0')).join(':')}
+  function fmt(raw,dec){if(raw==null)return '0';const p=10n**BigInt(dec),w=raw/p,f=raw%p;
+    let fs=f.toString().padStart(dec,'0').replace(/0+$/,'');if(fs.length>6)fs=fs.slice(0,6);
+    return w.toString()+(fs?'.'+fs:'')}
+  const toRaw=(v,dec)=>{if(!v)return 0n;const wf=String(v).split('.');const w=wf[0],f=wf[1]||'';
+    return BigInt(w||'0')*(10n**BigInt(dec))+BigInt((f+'0'.repeat(dec)).slice(0,dec)||'0')};
+
+  function loadQR(){if(qrp)return qrp;qrp=new Promise((res,rej)=>{
+    if(window.qrcode)return res(window.qrcode);
+    const s=document.createElement('script');s.src=QCDN;
+    s.onload=()=>res(window.qrcode);s.onerror=rej;document.head.appendChild(s)});return qrp}
+  async function drawQR(el,txt){try{
+    const q=await loadQR();const qr=q(0,'M');qr.addData(txt);qr.make();
+    el.innerHTML=qr.createSvgTag({cellSize:4,margin:0,scalable:true});
+    const svg=el.querySelector('svg');if(svg){svg.setAttribute('width','150');svg.setAttribute('height','150')}
+  }catch(e){el.textContent='QR unavailable'}}
+
+  function parseHash(){
+    const h=location.hash.slice(1); if(!h) return null;
+    const p=new URLSearchParams(h), c=p.get('c'), a=p.get('a');
+    if(!c||!a||!coin(c)||!coin(c).re.test(a)) return null;
+    return {coin:c,addr:a,amount:p.get('amt')||'',end:Number(p.get('t')||0),
+            base:p.get('b')||null,mode:p.get('m')||'real'};
+  }
+  function writeHash(){
+    const p=new URLSearchParams({c:S.coin,a:S.addr,m:S.mode,t:String(S.end)});
+    if(S.amount)p.set('amt',S.amount);
+    if(S.base)p.set('b',S.base);
+    history.replaceState(null,'','#'+p.toString());
+  }
+
+  function paint(){
+    if(tick){clearInterval(tick);tick=null}
+    if(poll){clearInterval(poll);poll=null}
+    const h=parseHash();
+    if(!h) return sel();
+    const x=loadX(h.addr);
+    S={...h,confirmed:!!x.confirmed,dest:x.dest||'',hash:x.hash||'',recv:x.recv==null?null:x.recv};
+    if(x.hash) return finished();
+    return vault();
+  }
+
+  function sel(){
+    body.innerHTML=`
+      <h2>What are you holding down?</h2>
+      <p class="sub">Pick an asset, then enter the wallet that receives the funds.</p>
+      <div class="seg">
+        <button data-m="real" class="${(S.mode||'real')==='real'?'on':''}">10 hours</button>
+        <button data-m="demo" class="${S.mode==='demo'?'on':''}">20 second demo</button>
+      </div>
+      <div class="grid">${COINS.map(c=>`<div class="coin" data-c="${c.id}">
+        <div class="ic" style="background:${c.c}">${esc(c.s.slice(0,3))}</div>
+        <div class="nm">${esc(c.n)}</div></div>`).join('')}</div>
+      <div class="amt">
+        <label>Your receiving address</label>
+        <input class="inp" id="my" placeholder="Select an asset first" disabled>
+        <div class="warn hide" id="werr">That doesn't look like a valid address for this chain.</div>
+        <label style="margin-top:14px">Amount to collect (optional)</label>
+        <input class="inp" id="amt" inputmode="decimal" placeholder="0.00" value="${esc(S.amount||'')}">
+      </div>
+      <div style="margin-top:16px">
+        <button class="btn pri" id="go" disabled>Generate deposit address</button>
+      </div>
+      <p class="note">A balance snapshot is taken on creation so the counter only tracks this deal.</p>`;
+
+    const go=body.querySelector('#go'), my=body.querySelector('#my'), werr=body.querySelector('#werr');
+    let valid=false, cur=S.coin||null;
+    function check(){
+      const c=cur&&coin(cur), v=my.value.trim();
+      valid=!!c&&c.re.test(v);
+      my.classList.toggle('bad',!!v&&!valid);
+      werr.classList.toggle('hide',!v||valid);
+      go.disabled=!valid;
+      if(c){const o=mine();o[c.id]=v;setMine(o)}
+    }
+    body.querySelectorAll('.coin').forEach(e=>e.onclick=()=>{
+      cur=e.dataset.c;S.coin=cur;
+      body.querySelectorAll('.coin').forEach(x=>x.classList.toggle('on',x.dataset.c===cur));
+      my.disabled=false;my.placeholder=coin(cur).s+' address';my.value=mine()[cur]||'';check();
+    });
+    body.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{S.mode=b.dataset.m;sel()});
+    my.oninput=check;
+    body.querySelector('#amt').oninput=e=>{S.amount=e.target.value};
+    go.onclick=async()=>{
+      if(!valid)return;
+      go.disabled=true;go.textContent='Taking snapshot…';
+      const c=coin(cur), a=my.value.trim();
+      let base=null; try{base=(await c.f(a)).toString()}catch(e){}
+      const end=Date.now()+(S.mode==='demo'?DEMO:REAL);
+      const p=new URLSearchParams({c:cur,a:a,m:S.mode||'real',t:String(end)});
+      if(S.amount)p.set('amt',S.amount); if(base)p.set('b',base);
+      location.hash=p.toString();
+      paint();
+    };
+    if(cur){const e=body.querySelector('.coin[data-c="'+cur+'"]');if(e)e.onclick()}
+  }
+
+  function vault(){
+    const c=coin(S.coin);
+    const target=S.amount?toRaw(S.amount,c.dec):0n;
+
+    body.innerHTML=`
+      <h2>Deposit address</h2>
+      <p class="sub">Send ${S.amount?'<b>'+esc(S.amount)+' </b>':''}${esc(c.n)} here. Do not close this page.</p>
+      <div class="card">
+        <div class="qrwrap"><div class="qr" id="qr">loading</div></div>
+        <div class="addr">${esc(S.addr)}</div>
+        <div class="cwrap"><button class="mini" id="cp">Copy address</button></div>
+        <div class="recv"><span class="dot" id="dot"></span><b id="rv">0</b>
+          <small id="rt">${S.amount?'of '+esc(S.amount)+' '+esc(c.s):esc(c.s)+' this deal'}</small></div>
+        <div class="bar"><i id="bar"></i></div>
+        <div class="note" id="rstat" style="text-align:center">Watching the chain…</div>
+        <div class="cwrap" style="margin-top:9px"><button class="mini" id="reb">Reset baseline</button></div>
+      </div>
+      <div class="card"><div class="clock">
+        <div class="time" id="clk">--:--:--</div><div class="st" id="st">window open</div>
+      </div></div>
+      <div class="card" id="act"></div>`;
+
+    drawQR(body.querySelector('#qr'),S.addr);
+
+    body.querySelector('#cp').onclick=e=>{
+      const done=()=>{e.target.textContent='Copied';
+        setTimeout(()=>e.target.textContent='Copy address',1400)};
+      const fb=()=>{const t=document.createElement('textarea');t.value=S.addr;
+        document.body.appendChild(t);t.select();
+        try{document.execCommand('copy');done()}catch(_){}t.remove()};
+      if(navigator.clipboard&&window.isSecureContext)
+        navigator.clipboard.writeText(S.addr).then(done).catch(fb);
+      else fb();
+    };
+
+    const clk=body.querySelector('#clk'),st=body.querySelector('#st'),act=body.querySelector('#act');
+    const rv=body.querySelector('#rv'),bar=body.querySelector('#bar');
+    const rstat=body.querySelector('#rstat'),dot=body.querySelector('#dot');
+    let got=0n;
+
+    function show(){
+      rv.textContent=fmt(got,c.dec);
+      if(target>0n){const pct=Number(got*1000n/target)/10;
+        bar.style.width=Math.min(100,pct)+'%';
+        rstat.textContent=pct>=100?'Full amount received.'
+          :pct>0?pct.toFixed(1)+'% of the requested amount.':'Waiting for funds…';
+      }else if(got>0n){rstat.textContent='Funds detected.';bar.style.width='100%'}
+      else{rstat.textContent='Waiting for funds…';bar.style.width='0'}
+    }
+
+    async function sample(){
+      try{
+        const raw=await c.f(S.addr);
+        if(!S.base){S.base=raw.toString();writeHash()}
+        const b=BigInt(S.base);got=raw>b?raw-b:0n;
+        dot.classList.remove('off');S.recv=got.toString();saveX();show();
+      }catch(e){dot.classList.add('off');
+        rstat.textContent='Live feed unavailable — verify on the explorer.'}
+    }
+    sample();poll=setInterval(sample,20000);
+
+    body.querySelector('#reb').onclick=async()=>{
+      try{S.base=(await c.f(S.addr)).toString();got=0n;writeHash();saveX();show();
+        rstat.textContent='Baseline reset — counting from zero.'}
+      catch(e){rstat.textContent='Could not reset baseline.'}
+    };
+
+    function frame(){
+      const left=S.end-Date.now();clk.textContent=hms(left);
+      if(left>0){st.textContent='window open · '+hms(left)+' remaining';
+        act.innerHTML='<button class="btn" disabled>Crypto has been transferred</button>'+
+          '<p class="note">Confirming unlocks when the timer runs out.</p>';return false}
+      clk.classList.add('hot');return true;
+    }
+    function openState(){
+      clk.classList.add('hot');clk.textContent='00:00:00';st.textContent='window elapsed';
+      const warn=(target>0n&&got<target)
+        ? '<div class="warn">Only '+esc(fmt(got,c.dec))+' '+esc(c.s)+' of '+esc(S.amount)+' '+esc(c.s)+' has arrived.</div>':'';
+      if(!S.confirmed){
+        act.innerHTML='<button class="btn pri" id="tr">Crypto has been transferred</button>'+warn+
+          '<p class="note">Confirm receipt to unlock the payout address field.</p>';
+        act.querySelector('#tr').onclick=()=>{S.confirmed=true;saveX();openState()};return;
+      }
+      act.innerHTML='<label>Payout wallet address</label>'+
+        '<input class="inp" id="dst" placeholder="Where should the funds go?" value="'+esc(S.dest||S.addr)+'">'+
+        '<div style="margin-top:12px"><button class="btn pri" id="sd">Send funds</button></div>'+
+        '<p class="note">Prefilled with your wallet — change it if the payout goes elsewhere.</p>';
+      const dst=act.querySelector('#dst');
+      dst.oninput=()=>{S.dest=dst.value.trim();saveX()};
+      act.querySelector('#sd').onclick=()=>{
+        if(!S.dest)return;S.hash='0x'+R(64,HEX);saveX();paint();
+      };
+    }
+    if(frame())openState();
+    else tick=setInterval(()=>{if(frame()){clearInterval(tick);tick=null;openState()}},250);
+  }
+
+  function finished(){
+    const c=coin(S.coin)||{s:'—',dec:8};
+    body.innerHTML=`
+      <div class="card">
+        <div class="ok">✓</div>
+        <h2 style="text-align:center">Funds released</h2>
+        <p class="sub" style="text-align:center">Escrow closed.</p>
+        <div class="row"><b>Received this deal</b><span>${esc(S.recv?fmt(BigInt(S.recv),c.dec):'0')} ${esc(c.s)}</span></div>
+        <div class="row"><b>To</b><span>${esc(S.dest)}</span></div>
+        <div class="row"><b>Reference</b><span>${esc((S.hash||'').slice(0,18))}…</span></div>
+      </div>
+      <button class="btn" id="new">Start a new escrow</button>`;
+    body.querySelector('#new').onclick=()=>{history.replaceState(null,'','#');S={};paint()};
+  }
+
+  window.addEventListener('hashchange',paint);
+  paint();
+
+  setTimeout(function(){
+    if(body && !body.innerHTML.trim())
+      body.innerHTML='<p class="warn">Nothing rendered. Reload the page.</p>';
+  },1500);
+})();
+</script>
+</body>
+</html>
