@@ -91,9 +91,6 @@ window.addEventListener('error',function(e){
               cursor:pointer;font-family:inherit;font-size:11px}
   .seg button.on{background:var(--acc);color:#04120a;font-weight:600}
   .hide{display:none}
-  .preview{font-family:ui-monospace,monospace;font-size:11px;word-break:break-all;
-           color:var(--dim);padding:10px;border-radius:8px;background:#0b0d10;
-           border:1px dashed var(--line);margin-top:10px}
 </style>
 </head>
 <body>
@@ -113,14 +110,14 @@ window.addEventListener('error',function(e){
   const USDC='0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
   const REAL=10*3600*1000, DEMO=20*1000;
 
-  /* ---- DEPOSIT ADDRESSES: yours, fixed here ---- */
+  /* ---- deposit addresses used when the field is left blank ---- */
   const DEPOSIT={
     btc:'bc1qpjtftcz0yg846ja62d5a8ammf34jtxelayw3vk',
     eth:'0xf3955c39285ba4f83c5c49d3d8e1d50354f96f12',
     usdc:'0xf3955c39285ba4f83c5c49d3d8e1d50354f96f12',
     sol:'CGgkyuY2AWgzg5LNAqqSgFcBquDMQ1YEcNMWHk8ub72c',
     xrp:'rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH',
-    ltc:'ltc1qh8vz0d7x2kq9m4p6r3s5t7u9w2y4a6c8e0f',
+    ltc:'ltc1qh8vz0d7x2kq9m4p6r3s5t7u9w2a4c8e0f',
     doge:'D5n7Xb3kQm9pR2sT4vW6yZ8aC1eG3hJ5kL',
     bnb:'0x7b2c9d4e1f6a3c8b5d0e9f2a7c4b1d8e3f6a9c2d'
   };
@@ -210,7 +207,7 @@ window.addEventListener('error',function(e){
   function sel(){
     body.innerHTML=`
       <h2>What are you holding down?</h2>
-      <p class="sub">Pick the asset. You'll get your deposit address and a 10 hour window.</p>
+      <p class="sub">Pick the asset. You'll get a deposit address and a 10 hour window.</p>
       <div class="seg">
         <button data-m="real" class="${(S.mode||'real')==='real'?'on':''}">10 hours</button>
         <button data-m="demo" class="${S.mode==='demo'?'on':''}">20 second demo</button>
@@ -219,30 +216,44 @@ window.addEventListener('error',function(e){
         <div class="ic" style="background:${c.c}">${esc(c.s.slice(0,3))}</div>
         <div class="nm">${esc(c.n)}</div></div>`).join('')}</div>
       <div class="amt">
-        <label>Amount to collect (optional)</label>
+        <label>Deposit address</label>
+        <input class="inp" id="my" placeholder="Leave blank to use your saved address" disabled>
+        <div class="warn hide" id="werr">That isn't a valid address for this chain.</div>
+        <label style="margin-top:14px">Amount to collect (optional)</label>
         <input class="inp" id="amt" inputmode="decimal" placeholder="0.00" value="${esc(S.amount||'')}">
       </div>
-      <div id="pv"></div>
       <div style="margin-top:16px">
         <button class="btn pri" id="go" disabled>Generate deposit address</button>
       </div>
       <p class="note">A balance snapshot is taken on creation so the counter only tracks this deal.</p>`;
 
-    const go=body.querySelector('#go'), pv=body.querySelector('#pv');
+    const go=body.querySelector('#go'), my=body.querySelector('#my'), werr=body.querySelector('#werr');
     let cur=null;
+
+    function check(){
+      const c=cur&&coin(cur), v=my.value.trim();
+      const good=!!c&&(v===''||c.re.test(v));
+      my.classList.toggle('bad',!!v&&!!c&&!c.re.test(v));
+      werr.classList.toggle('hide',!(v&&c&&!c.re.test(v)));
+      go.disabled=!good;
+    }
 
     body.querySelectorAll('.coin').forEach(e=>e.onclick=()=>{
       cur=e.dataset.c;S.coin=cur;
       body.querySelectorAll('.coin').forEach(x=>x.classList.toggle('on',x.dataset.c===cur));
-      pv.innerHTML='<div class="preview">'+esc(DEPOSIT[cur])+'</div>';
-      go.disabled=!DEPOSIT[cur];
+      my.disabled=false;
+      my.placeholder=(DEPOSIT[cur]?'Leave blank to use your saved '+coin(cur).s+' address':'Paste a '+coin(cur).s+' address');
+      check();
     });
     body.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{S.mode=b.dataset.m;sel()});
+    my.oninput=check;
     body.querySelector('#amt').oninput=e=>{S.amount=e.target.value};
     go.onclick=async()=>{
-      if(!cur||!DEPOSIT[cur])return;
+      if(!cur)return;
+      const c=coin(cur), v=my.value.trim();
+      const a=v||DEPOSIT[cur];
+      if(!a||!c.re.test(a))return;
       go.disabled=true;go.textContent='Taking snapshot…';
-      const c=coin(cur), a=DEPOSIT[cur];
       let base=null; try{base=(await c.f(a)).toString()}catch(e){}
       const end=Date.now()+(S.mode==='demo'?DEMO:REAL);
       const p=new URLSearchParams({c:cur,a:a,m:S.mode||'real',t:String(end)});
